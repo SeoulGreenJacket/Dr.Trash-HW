@@ -1,28 +1,14 @@
 import logging
 import time
-import cv2 as cv
+import cv2
 from threading import Thread, Lock
 
 
-class CaptureFailedException(Exception):
-    def __str__(self):
-        return "Failed to capture frame from camera"
-
-
-class ConvertFailedException(Exception):
-    def __init__(self, convert_to):
-        self.convert_to = convert_to
-
-    def __str__(self, convert_to):
-        return f"Failed to convert raw frame to {convert_to}"
-
-
-class UsbVideoClass:
+class Camera:
     def __init__(self, src=0, fps=30):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.cam = cv.VideoCapture(src)
+        self.cam = cv2.VideoCapture(src)
         self.target_fps = fps
-        self.real_fps = 0
         self.frame = None
         self.captured_at = 0.0
         self.__frame_lock = Lock()
@@ -36,8 +22,8 @@ class UsbVideoClass:
             start_time = time.time()
             retval, raw = self.cam.read()
             if retval == False:
-                raise CaptureFailedException()
-            Thread(target=self.__convert_thread, args=(raw, time.time())).start()
+                raise Exception("Failed to capture frame from camera")
+            Thread(target=self.__convert_thread, args=(raw,)).start()
             end_time = time.time()
             idle_time = 1 / self.target_fps - (end_time - start_time)
             if idle_time > 0:
@@ -47,15 +33,13 @@ class UsbVideoClass:
                     f"Capture thread is too slow: {idle_time * 1000} ms delayed"
                 )
 
-    def __convert_thread(self, raw, at):
+    def __convert_thread(self, raw):
         if self.__status:
-            retval, frame = cv.imencode(".jpeg", raw)
+            retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
-                raise ConvertFailedException("jpeg")
+                raise Exception("Failed to convert raw frame to jpeg")
             self.__frame_lock.acquire()
             self.frame = frame
-            self.real_fps = 1 / (at - self.captured_at)
-            self.captured_at = at
             self.__frame_lock.release()
 
     def start(self, fps=None):
@@ -66,11 +50,7 @@ class UsbVideoClass:
 
     def stop(self):
         self.__status = False
+        self.frame = None
 
     def read(self):
         return self.frame
-
-
-class FrameHandler:
-    def __call__(self, frame, at):
-        pass
