@@ -14,6 +14,7 @@ class Consumer:
 
     def handle(self, message, handler):
         self.handlers.append((message, handler))
+        self.consumer.commit()
 
 
 class Producer:
