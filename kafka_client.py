@@ -3,7 +3,9 @@ from kafka import KafkaConsumer, KafkaProducer
 
 class Consumer:
     def __init__(self, topic):
-        self.consumer = KafkaConsumer(topic, bootstrap_servers="seheon.codes:29092")
+        self.consumer = KafkaConsumer(
+            topic, bootstrap_servers="seheon.codes:29092", group_id="camera"
+        )
         self.handlers = []
 
     def consume(self):
