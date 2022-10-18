@@ -1,19 +1,20 @@
 import logging
 import time
 import cv2
-from threading import Thread, Lock
+from threading import Thread
+from kafka import KafkaProducer
 
 
 class Camera:
-    def __init__(self, src=0, fps=30):
+    def __init__(self, uuid, src=0, fps=20):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(f"Use camera source: {src}")
         self.cam = cv2.VideoCapture(src)
         self.target_fps = fps
-        self.frame = None
         self.captured_at = 0.0
-        self.__frame_lock = Lock()
         self.__status = False
+        self.__kafka_client = KafkaProducer(bootstrap_servers="seheon.codes:29092")
+        self.__kafka_topic = uuid
 
     def __del__(self):
         self.cam.release()
@@ -31,7 +32,7 @@ class Camera:
                 time.sleep(idle_time)
             else:
                 self.logger.warning(
-                    f"Capture thread is too slow: {idle_time * 1000} ms delayed"
+                    f"Capture thread is too slow: {-idle_time * 1000:6.2f} ms delayed"
                 )
 
     def __convert_thread(self, raw):
@@ -39,9 +40,8 @@ class Camera:
             retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
-            self.__frame_lock.acquire()
-            self.frame = frame
-            self.__frame_lock.release()
+            frame_bytes = frame.tobytes()
+            self.__kafka_client.send(self.__kafka_topic, frame_bytes)
 
     def start(self, fps=None):
         self.__status = True
@@ -49,9 +49,6 @@ class Camera:
             self.target_fps = fps
         Thread(target=self.__capture_thread).start()
 
-    def stop(self):
+    def pause(self):
         self.__status = False
         self.frame = None
-
-    def read(self):
-        return self.frame

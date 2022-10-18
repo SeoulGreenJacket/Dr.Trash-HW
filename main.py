@@ -1,47 +1,39 @@
-import logging
+from kafka import KafkaConsumer
 from camera import Camera
-import time
+import os
 
-from kafka_client import Client
-
-logger = logging.getLogger(__name__)
 __status = False
+__camera = Camera(os.environ["CAMERA_ID"])
+__consumer = KafkaConsumer(
+    f"{os.environ['CAMERA_ID']}-control",
+    bootstrap_servers=os.environ["KAFKA_HOST"],
+    group_id="camera",
+)
 
 
 def on_start(message):
     global __status
     if __status == True:
         return
-
-    logger.info(f"[{message.timestamp}] Camera started")
-
+    __camera.start()
     __status = True
-    camera = Camera()
-    camera.start()
-    fps = 30
-    while __status:
-        start_time = time.time()
-        image = camera.read()
-        if image is not None:
-            client.producer.send(image)
-        end_time = time.time()
-        idle_time = 1 / fps - (end_time - start_time)
-        if idle_time > 0:
-            time.sleep(idle_time)
+    print(f"[{message.timestamp}] Camera started")
 
 
 def on_pause(message):
     global __status
-    if __status == True:
-        logger.info(f"[{message.timestamp}] Camera paused")
-        __status = False
+    if __status == False:
+        return
+    __camera.pause()
+    __status = False
+    print(f"[{message.timestamp}] Camera paused")
 
 
 if __name__ == "__main__":
-    uuid = "ddcd8c24-4fe4-4f87-b197-da65ab63f17f"
-
-    client = Client(uuid)
-    client.consumer.handle("start", on_start)
-    client.consumer.handle("pause", on_pause)
-    logger.info(f"Waiting for message: topic = {uuid}")
-    client.consumer.consume()
+    print("Waiting for message...")
+    for message in __consumer:
+        if message.value == b"start":
+            on_start(message)
+        elif message.value == b"pause":
+            on_pause(message)
+    print("Consumer stopped")
