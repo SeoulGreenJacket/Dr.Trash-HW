@@ -19,10 +19,10 @@ class Consumer:
 class Producer:
     def __init__(self, topic):
         self.producer = KafkaProducer(bootstrap_servers="seheon.codes:29092")
-        self.topic = topic
+        self.__topic = topic
 
     def send(self, msg):
-        self.producer.send(self.topic, msg)
+        self.producer.send(self.__topic, msg)
 
     def close(self):
         self.producer.close()
@@ -32,4 +32,4 @@ class Client:
     def __init__(self, topic):
         self.topic = topic
         self.producer = Producer(topic)
-        self.consumer = Consumer(topic)
+        self.consumer = Consumer(topic + "-control")
