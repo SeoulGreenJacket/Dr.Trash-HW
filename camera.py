@@ -7,6 +7,7 @@ from threading import Thread, Lock
 class Camera:
     def __init__(self, src=0, fps=30):
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.debug(f"Use camera source: {src}")
         self.cam = cv2.VideoCapture(src)
         self.target_fps = fps
         self.frame = None
@@ -29,7 +30,7 @@ class Camera:
             if idle_time > 0:
                 time.sleep(idle_time)
             else:
-                logging.warning(
+                self.logger.warning(
                     f"Capture thread is too slow: {idle_time * 1000} ms delayed"
                 )
 

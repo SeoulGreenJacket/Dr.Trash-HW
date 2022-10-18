@@ -8,12 +8,12 @@ class Consumer:
 
     def consume(self):
         for message in self.consumer:
-            for msg, handler, args in self.handlers:
-                if message.value == msg:
-                    handler(args)
+            for value, func in self.handlers:
+                if message.value == value:
+                    func(message)
 
-    def handle(self, message, handler, args=None):
-        self.handlers.append((message, handler, args))
+    def handle(self, message, handler):
+        self.handlers.append((message, handler))
 
 
 class Producer:
