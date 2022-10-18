@@ -44,3 +44,4 @@ if __name__ == "__main__":
     client.consumer.handle("start", on_start)
     client.consumer.handle("pause", on_pause)
     logger.info(f"Waiting for message: topic = {uuid}")
+    client.consumer.consume()
