@@ -5,7 +5,6 @@
 #### Capture and encoding are processed via OpenCV and transmission is processed by Kafka.
 
 ![License](https://img.shields.io/github/license/SeoulGreenJacket/Dr.Trash-HW?style=for-the-badge)
-
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/y/SeoulGreenJacket/Dr.Trash-HW?style=for-the-badge)
 
 ## Requirements
