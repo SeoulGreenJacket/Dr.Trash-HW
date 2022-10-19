@@ -1,4 +1,3 @@
-import logging
 import time
 import cv2
 from threading import Thread
@@ -7,14 +6,15 @@ from kafka import KafkaProducer
 
 class Camera:
     def __init__(self, uuid, src=0, fps=20):
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.debug(f"Use camera source: {src}")
+        print("Initializing camera ...", end="")
         self.cam = cv2.VideoCapture(src)
         self.target_fps = fps
         self.captured_at = 0.0
         self.__status = False
         self.__kafka_client = KafkaProducer(bootstrap_servers="seheon.codes:29092")
         self.__kafka_topic = uuid
+        print("\r                     ", end="\r")
+        print("Camera initialized")
 
     def __del__(self):
         self.cam.release()
