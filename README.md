@@ -39,8 +39,7 @@ $ python -m pip install -r requirements.txt
 To run Dr.Trash-HW:
 
 ```bash
-$ export $(cat .env | xargs)
-$ python main.py
+$ env $(cat .env | xargs) python main.py
 ```
 
 Now, you can use our [Dr.Trash-FE](https://github.com/SeoulGreenJacket/Dr.Trash-FE) application.
