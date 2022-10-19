@@ -3,9 +3,9 @@ from camera import Camera
 import os
 
 __status = False
-__camera = Camera(os.environ["CAMERA_ID"])
+__camera = Camera(os.environ["CAMERA_UUID"])
 __consumer = KafkaConsumer(
-    f"{os.environ['CAMERA_ID']}-control",
+    f"{os.environ['CAMERA_UUID']}-control",
     bootstrap_servers=os.environ["KAFKA_HOST"],
     group_id="camera",
 )
