@@ -39,6 +39,7 @@ $ python -m pip install -r requirements.txt
 To run Dr.Trash-HW:
 
 ```bash
+$ export $(cat .env | xargs)
 $ python main.py
 ```
 
