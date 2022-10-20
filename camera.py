@@ -40,8 +40,7 @@ class Camera:
             retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
-            frame_bytes = str(frame.tobytes()).encode()
-            self.__kafka_client.send(self.__kafka_topic, frame_bytes)
+            self.__kafka_client.send(self.__kafka_topic, frame.tobytes())
 
     def start(self, fps=None):
         self.__status = True
