@@ -31,7 +31,7 @@ class Camera:
             if idle_time > 0:
                 time.sleep(idle_time)
             else:
-                self.logger.warning(
+                print(
                     f"Capture thread is too slow: {-idle_time * 1000:6.2f} ms delayed"
                 )
 
@@ -40,7 +40,7 @@ class Camera:
             retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
-            frame_bytes = frame.tobytes()
+            frame_bytes = str(frame.tobytes()).encode()
             self.__kafka_client.send(self.__kafka_topic, frame_bytes)
 
     def start(self, fps=None):
