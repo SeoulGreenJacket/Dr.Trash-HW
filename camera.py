@@ -67,4 +67,5 @@ class Camera:
         for i in range(4):
             self.__processes[i].join()
             self.__processes[i].close()
+        self.__kafka_client.send(self.__uuid, b"end")
         self.__processes.clear()
