@@ -11,8 +11,9 @@ class Camera:
         print("Initializing camera ...", end="")
         self.__fps = fps
         self.__uuid = uuid
-        self.__cam = Value(cv2.VideoCapture, src)
+        self.__cam = cv2.VideoCapture(src)
         self.__status = Value("b", False)
+        self.__frame = None
         self.__camera_semaphore = BoundedSemaphore(fps)
         self.__kafka_client = None
         self.__capture_semaphore = None
@@ -27,11 +28,14 @@ class Camera:
         print("Wait for camera to be ready ...", end="")
         for _ in range(self.__fps):
             self.__camera_semaphore.acquire()
-        _, _ = self.__cam.value.read()
+        _, _ = self.__cam.read()
         print("                               ", end="")
         print("\rStart capturing ...")
         while self.__status:
             try:
+                retval, self.__frame = self.__cam.read()
+                if retval:
+                    raise Exception("Failed to capture frame from camera")
                 self.__camera_semaphore.release()
             except ValueError:
                 print("[WARN] Converting process is too slow.")
@@ -46,10 +50,7 @@ class Camera:
 
     def __camera_thread(self) -> None:
         if self.__status:
-            retval, raw = self.__cam.value.read()
-            if retval == False:
-                raise Exception("Failed to capture frame from camera")
-            retval, frame = cv2.imencode(".jpeg", raw)
+            retval, frame = cv2.imencode(".jpeg", self.__frame)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
             self.__kafka_client.send(self.__uuid, frame.tobytes())
@@ -64,8 +65,13 @@ class Camera:
 
     def pause(self) -> None:
         self.__status = False
-        for i in range(4):
-            self.__processes[i].join()
-            self.__processes[i].close()
+        while True:
+            try:
+                self.__camera_semaphore.release()
+            except ValueError:
+                break
+        for p in self.__processes:
+            p.join()
+            p.close()
         self.__kafka_client.send(self.__uuid, b"end")
         self.__processes.clear()
