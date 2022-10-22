@@ -30,10 +30,10 @@ def on_pause(message):
 
 
 if __name__ == "__main__":
-    print("Ready to receive control messages")
+    print("[INFO] Ready to receive control messages")
     for message in __consumer:
         if message.value == b"start":
             on_start(message)
         elif message.value == b"pause":
             on_pause(message)
-    print("Consumer stopped")
+    print("[INFO] Consumer stopped")
