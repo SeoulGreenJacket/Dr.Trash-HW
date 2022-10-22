@@ -21,7 +21,7 @@ class Camera:
         print("Camera initialized")
 
     def __del__(self) -> None:
-        self.cam.release()
+        self.__cam.release()
 
     def __main_thread(self) -> None:
         print("Wait for camera to be ready ...", end="")
