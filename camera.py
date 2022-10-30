@@ -10,6 +10,7 @@ from kafka import KafkaProducer
 class Camera:
     def __init__(self, uuid, src=0, fps=30) -> None:
         print("Initializing camera ...", end="")
+        self.__target_fps = fps
         self.__fps = fps
         self.__uuid = uuid
         self.__cam = cv2.VideoCapture(src)
@@ -26,7 +27,9 @@ class Camera:
         self.__cam.release()
 
     def __main_thread(self) -> None:
+        self.__fps = self.__target_fps
         while self.__status:
+            start_time = time.time()
             try:
                 retval, frame = self.__cam.read()
                 if retval == False:
@@ -37,10 +40,16 @@ class Camera:
                     f"[{int(time.time())}] Converting process is too slow. Dropping frame ... ({self.__fps} fps)",
                 )
                 self.__fps = max(20, self.__fps - 1)
-                time.sleep(1)
             except ValueError:  # Queue is closed
                 break
-            time.sleep(1 / self.__fps)
+            capture_duration = time.time() - start_time
+            if capture_duration < 1 / self.__fps:
+                time.sleep(1 / self.__fps - capture_duration)
+                if self.__fps < self.__target_fps:
+                    print(
+                        f"[{int(time.time())}] Converting process is fast enough. Increasing fps ... ({self.__fps} fps)"
+                    )
+                    self.__fps += 1
 
     def __camera_process(self) -> None:
         threads = []
