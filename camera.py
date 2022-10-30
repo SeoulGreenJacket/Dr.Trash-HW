@@ -14,9 +14,11 @@ class Camera:
         self.__uuid = uuid
         self.__cam = cv2.VideoCapture(src)
         self.__status = Value("b", False)
-        self.__frame = Queue(maxsize=fps)
+        self.__frame = None
         self.__kafka_client = None
         self.__processes = []
+        self.__num_process = 8
+        self.__num_threads = 10
         print("\r                       ", end="\r")
         print("Camera initialized")
 
@@ -31,14 +33,19 @@ class Camera:
                     raise Exception("Failed to capture frame from camera")
                 self.__frame.put(frame, block=False)
             except queue.Full:
-                print("[WARN] Converting process is too slow.")
+                print(
+                    f"[{int(time.time())}] Converting process is too slow. Dropping frame ... ({self.__fps} fps)",
+                )
+                self.__fps = max(20, self.__fps - 1)
+                time.sleep(1)
+            except ValueError:  # Queue is closed
+                break
             time.sleep(1 / self.__fps)
-        self.__frame.close()
 
     def __camera_process(self) -> None:
         threads = []
         self.__kafka_client = KafkaProducer(bootstrap_servers=os.environ["KAFKA_HOST"])
-        for _ in range(10):
+        for _ in range(self.__num_threads):
             threads.append(Thread(target=self.__camera_thread))
             threads[-1].start()
         for thread in threads:
@@ -48,7 +55,6 @@ class Camera:
     def __camera_thread(self) -> None:
         while self.__status:
             raw = self.__frame.get(block=True)
-            print(os.getpid(), os.getppid())
             retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
@@ -56,17 +62,18 @@ class Camera:
 
     def start(self) -> None:
         self.__status = True
-        for _ in range(4):
+        self.__frame = Queue(maxsize=self.__fps)
+        for _ in range(self.__num_process):
             self.__processes.append(Process(target=self.__camera_process))
             self.__processes[-1].start()
         Thread(target=self.__main_thread).start()
 
     def pause(self) -> None:
         self.__status = False
+        self.__frame.close()
+        self.__frame.join_thread()
         for p in self.__processes:
             p.kill()
             p.join()
             p.close()
-        while self.__frame.empty() == False:
-            self.__frame.get(block=False)
         self.__processes.clear()
