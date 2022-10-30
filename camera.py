@@ -1,6 +1,7 @@
-from multiprocessing import Process, BoundedSemaphore, Value
+from multiprocessing import Process, Queue, Value
 import os
-from threading import Thread, Semaphore
+import queue
+from threading import Thread
 import time
 import cv2
 from kafka import KafkaProducer
@@ -13,48 +14,45 @@ class Camera:
         self.__uuid = uuid
         self.__cam = cv2.VideoCapture(src)
         self.__status = Value("b", False)
-        self.__frame = None
-        self.__camera_semaphore = BoundedSemaphore(fps)
+        self.__frame = Queue(maxsize=fps)
         self.__kafka_client = None
-        self.__capture_semaphore = None
         self.__processes = []
-        print("\r                     ", end="\r")
+        print("\r                       ", end="\r")
         print("Camera initialized")
 
     def __del__(self) -> None:
         self.__cam.release()
 
     def __main_thread(self) -> None:
-        print("Wait for camera to be ready ...", end="")
-        for _ in range(self.__fps):
-            self.__camera_semaphore.acquire()
-        _, _ = self.__cam.read()
-        print("                               ", end="")
-        print("\rStart capturing ...")
         while self.__status:
             try:
-                retval, self.__frame = self.__cam.read()
-                if retval:
+                retval, frame = self.__cam.read()
+                if retval == False:
                     raise Exception("Failed to capture frame from camera")
-                self.__camera_semaphore.release()
-            except ValueError:
+                self.__frame.put(frame, block=False)
+            except queue.Full:
                 print("[WARN] Converting process is too slow.")
             time.sleep(1 / self.__fps)
+        self.__frame.close()
 
     def __camera_process(self) -> None:
+        threads = []
         self.__kafka_client = KafkaProducer(bootstrap_servers=os.environ["KAFKA_HOST"])
-        self.__capture_semaphore = Semaphore(10)
-        while self.__status and self.__capture_semaphore.acquire():
-            if self.__camera_semaphore.acquire():
-                Thread(target=self.__camera_thread).start()
+        for _ in range(10):
+            threads.append(Thread(target=self.__camera_thread))
+            threads[-1].start()
+        for thread in threads:
+            thread.join()
+        self.__kafka_client.close()
 
     def __camera_thread(self) -> None:
-        if self.__status:
-            retval, frame = cv2.imencode(".jpeg", self.__frame)
+        while self.__status:
+            raw = self.__frame.get(block=True)
+            print(os.getpid(), os.getppid())
+            retval, frame = cv2.imencode(".jpeg", raw)
             if retval == False:
                 raise Exception("Failed to convert raw frame to jpeg")
             self.__kafka_client.send(self.__uuid, frame.tobytes())
-        self.__capture_semaphore.release()
 
     def start(self) -> None:
         self.__status = True
@@ -65,13 +63,10 @@ class Camera:
 
     def pause(self) -> None:
         self.__status = False
-        while True:
-            try:
-                self.__camera_semaphore.release()
-            except ValueError:
-                break
         for p in self.__processes:
+            p.kill()
             p.join()
             p.close()
-        self.__kafka_client.send(self.__uuid, b"end")
+        while self.__frame.empty() == False:
+            self.__frame.get(block=False)
         self.__processes.clear()
