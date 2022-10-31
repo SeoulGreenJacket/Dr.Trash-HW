@@ -1,7 +1,7 @@
 from kafka import KafkaConsumer, KafkaProducer
 from capturer import Capturer
 import os
-import imagezmq
+from imagezmq import ImageSender
 import threading
 
 FPS = 30
@@ -18,7 +18,7 @@ capturer = Capturer(0, FPS)
 
 
 def __sender_process(host, port):
-    sender = imagezmq.ImageSender(connect_to=f"tcp://{host}:{port}", REQ_REP=False)
+    sender = ImageSender(connect_to=f"tcp://{host}:{port}")
 
     global status
     while status == "running":
