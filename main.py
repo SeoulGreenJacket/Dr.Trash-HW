@@ -1,44 +1,77 @@
 from kafka import KafkaConsumer, KafkaProducer
-from camera import Camera
+from capturer import Capturer
 import os
+import imagezmq
+import threading
 
-__status = False
-__camera = Camera(os.environ["CAMERA_UUID"])
-__uuid = os.environ["CAMERA_UUID"]
-__consumer = KafkaConsumer(
-    f"{os.environ['CAMERA_UUID']}-control",
-    bootstrap_servers=os.environ["KAFKA_HOST"],
-    group_id="camera",
-)
-__producer = KafkaProducer(bootstrap_servers=os.environ["KAFKA_HOST"])
+FPS = 30
+
+CAMERA_UUID = os.environ["CAMERA_UUID"]
+KAFKA_HOST = os.environ["KAFKA_HOST"]
+TRACKER_TOPIC = os.environ["KAFKA_TOPIC_TRACKER"]
 
 
-def on_start(message, usage_id):
-    global __status
-    if __status == True:
-        return
-    __producer.send(os.environ["KAFKA_TOPIC_TRACKER"], f"{usage_id}_{__uuid}".encode())
-    __camera.start()
-    __status = True
-    print(f"[{message.timestamp}] Camera started")
+producer = KafkaProducer(bootstrap_servers=KAFKA_HOST)
+status = "blocked"
+
+capturer = Capturer(0, FPS)
+
+
+def __sender_process(host, port):
+    sender = imagezmq.ImageSender(connect_to=f"tcp://{host}:{port}", REQ_REP=False)
+
+    global status
+    while status == "running":
+        jpeg = capturer.read()
+        sender.send_jpg(CAMERA_UUID, jpeg)
+    sender.send_jpg(CAMERA_UUID, b"END")
+    sender.close()
+
+
+def on_ready(message, usage_id):
+    global status
+    if status == "blocked":
+        status = "ready"
+        producer.send(TRACKER_TOPIC, f"{usage_id}_{CAMERA_UUID}".encode())
+        print(f"[{message.timestamp}] Camera ready")
+
+
+def on_start(message, host, port):
+    global status
+    if status == "ready":
+        status = "running"
+        capturer.start()
+        threading.Thread(target=__sender_process, args=(host, port)).start()
+        print(f"[{message.timestamp}] Camera started")
 
 
 def on_pause(message):
-    global __status
-    if __status == False:
-        return
-    __status = False
-    __camera.pause()
-    __producer.send(__uuid, b"end")
-    print(f"[{message.timestamp}] Camera paused")
+    global status
+    if status == "running":
+        status = "blocked"
+        capturer.pause()
+        print(f"[{message.timestamp}] Camera paused")
 
 
 if __name__ == "__main__":
+    consumer = KafkaConsumer(
+        f"{CAMERA_UUID}-control",
+        bootstrap_servers=KAFKA_HOST,
+        group_id="camera",
+    )
     print("[INFO] Ready to receive control messages")
-    for message in __consumer:
+
+    for message in consumer:
         tokens = message.value.decode("utf-8").split("-")
-        if tokens[0] == "start":
-            on_start(message, usage_id=tokens[1])
+        if tokens[0] == "ready":
+            on_ready(message, usage_id=tokens[1])
+        elif tokens[0] == "start":
+            on_start(message, host=tokens[1], port=tokens[2])
         elif tokens[0] == "pause":
             on_pause(message)
+        elif tokens[0] == "stop":
+            on_pause(message)
+            break
+
+    consumer.close()
     print("[INFO] Consumer stopped")
